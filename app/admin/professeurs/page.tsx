@@ -21,7 +21,18 @@ import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import { ArrowLeft, Plus, Search, Edit, Trash2, User, Mail, Phone, Eye } from "lucide-react"
 
-const mockProfessors = [
+interface Professor {
+  id: string
+  name: string
+  email: string
+  phone: string
+  department: string
+  subjects: string[]
+  status: string
+  grade: string
+}
+
+const mockProfessors: Professor[] = [
   {
     id: "1",
     name: "Dr. Ahmed Benali",
@@ -31,7 +42,6 @@ const mockProfessors = [
     subjects: ["Analyse", "Algèbre", "Géométrie"],
     status: "Actif",
     grade: "Professeur",
-    office: "Bureau 201",
   },
   {
     id: "2",
@@ -42,7 +52,6 @@ const mockProfessors = [
     subjects: ["Mécanique", "Thermodynamique", "Optique"],
     status: "Actif",
     grade: "Maître de Conférences",
-    office: "Bureau 105",
   },
   {
     id: "3",
@@ -53,7 +62,6 @@ const mockProfessors = [
     subjects: ["Programmation", "Base de Données", "Réseaux"],
     status: "Actif",
     grade: "Professeur",
-    office: "Bureau 301",
   },
   {
     id: "4",
@@ -64,7 +72,6 @@ const mockProfessors = [
     subjects: ["Chimie Organique", "Chimie Analytique"],
     status: "Congé",
     grade: "Maître Assistant",
-    office: "Bureau 102",
   },
   {
     id: "5",
@@ -75,7 +82,6 @@ const mockProfessors = [
     subjects: ["Anglais", "Communication"],
     status: "Actif",
     grade: "Chargé de Cours",
-    office: "Bureau 205",
   },
 ]
 
@@ -92,6 +98,30 @@ const departments = [
 
 const grades = ["Professeur", "Maître de Conférences", "Maître Assistant", "Chargé de Cours", "Vacataire"]
 
+// Department color mapping
+const getDepartmentColor = (department: string) => {
+  switch (department) {
+    case "Architecture":
+      return "bg-blue-100 text-blue-800 border-blue-200"
+    case "Mathématiques":
+      return "bg-green-100 text-green-800 border-green-200"
+    case "Informatique":
+      return "bg-purple-100 text-purple-800 border-purple-200"
+    case "Physique":
+      return "bg-orange-100 text-orange-800 border-orange-200"
+    case "Chimie":
+      return "bg-red-100 text-red-800 border-red-200"
+    case "Sciences de la Matière":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200"
+    case "Sciences de la Nature et de la Vie":
+      return "bg-emerald-100 text-emerald-800 border-emerald-200"
+    case "Langues":
+      return "bg-pink-100 text-pink-800 border-pink-200"
+    default:
+      return "bg-gray-100 text-gray-800 border-gray-200"
+  }
+}
+
 export default function AdminProfessorsPage() {
   const [professors, setProfessors] = useState(mockProfessors)
   const [searchTerm, setSearchTerm] = useState("")
@@ -105,7 +135,6 @@ export default function AdminProfessorsPage() {
     department: "",
     subjects: "",
     grade: "",
-    office: "",
   })
 
   const filteredProfessors = professors.filter(
@@ -123,7 +152,7 @@ export default function AdminProfessorsPage() {
       status: "Actif",
     }
     setProfessors([...professors, professor])
-    setNewProfessor({ name: "", email: "", phone: "", department: "", subjects: "", grade: "", office: "" })
+    setNewProfessor({ name: "", email: "", phone: "", department: "", subjects: "", grade: ""})
     setIsAddDialogOpen(false)
   }
 
@@ -146,6 +175,14 @@ export default function AdminProfessorsPage() {
 
   const handleDeleteProfessor = (profId: string) => {
     setProfessors(professors.filter((prof) => prof.id !== profId))
+  }
+
+  const handleStatusToggle = (professorId: string) => {
+    setProfessors(professors.map(prof => 
+      prof.id === professorId 
+        ? { ...prof, status: prof.status === "Actif" ? "Congé" : "Actif" }
+        : prof
+    ))
   }
 
   const getStatusBadge = (status: string) => {
@@ -266,17 +303,6 @@ export default function AdminProfessorsPage() {
                   </Select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="office" className="text-right">
-                    Bureau
-                  </Label>
-                  <Input
-                    id="office"
-                    value={newProfessor.office}
-                    onChange={(e) => setNewProfessor({ ...newProfessor, office: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="subjects" className="text-right">
                     Matières
                   </Label>
@@ -341,11 +367,16 @@ export default function AdminProfessorsPage() {
                         <User className="h-4 w-4 mr-2" />
                         <div>
                           <div>{professor.name}</div>
-                          <div className="text-sm text-gray-500">{professor.office}</div>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>{professor.department}</TableCell>
+                    <TableCell>
+                      <Badge 
+                        className={`cursor-pointer hover:opacity-80 transition-opacity ${getDepartmentColor(professor.department)}`}
+                      >
+                        {professor.department}
+                      </Badge>
+                    </TableCell>
                     <TableCell>{professor.grade}</TableCell>
                     <TableCell>
                       <div className="space-y-1">
@@ -373,7 +404,14 @@ export default function AdminProfessorsPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{getStatusBadge(professor.status)}</TableCell>
+                    <TableCell>
+                      <div 
+                        onClick={() => handleStatusToggle(professor.id)}
+                        className="cursor-pointer"
+                      >
+                        {getStatusBadge(professor.status)}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
                         <Link href={`/professeurs/${professor.id}`}>

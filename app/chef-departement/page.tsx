@@ -36,7 +36,7 @@ const quickActions = [
   {
     title: "Salles Libres",
     description: "Voir la disponibilité des salles",
-    href: "/salles-libres",
+    href: "/chef-departement/salles",
     icon: Clock,
     color: "bg-orange-500",
   },

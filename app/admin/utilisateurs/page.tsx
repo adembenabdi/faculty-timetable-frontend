@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,152 +18,290 @@ import {
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import Link from "next/link"
-import { ArrowLeft, Plus, Search, Edit, Trash2, UserCheck, Mail, Shield, Eye, EyeOff } from "lucide-react"
+import { ArrowLeft, Plus, Search, Edit, Trash2, UserCheck, Mail, Shield, Eye, EyeOff, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 
-const mockUsers = [
-  {
-    id: "1",
-    name: "Dr. Ahmed Benali",
-    email: "a.benali@univ.dz",
-    role: "Professor",
-    department: "Mathématiques",
-    status: "Actif",
-    lastLogin: "2024-01-15",
-    createdAt: "2023-09-01",
-  },
-  {
-    id: "2",
-    name: "Dr. Omar Khelifi",
-    email: "o.khelifi@univ.dz",
-    role: "Department Head",
-    department: "Informatique",
-    status: "Actif",
-    lastLogin: "2024-01-14",
-    createdAt: "2023-09-01",
-  },
-  {
-    id: "3",
-    name: "Admin Système",
-    email: "admin@univ.dz",
-    role: "Full Admin",
-    department: "Administration",
-    status: "Actif",
-    lastLogin: "2024-01-16",
-    createdAt: "2023-08-15",
-  },
-  {
-    id: "4",
-    name: "Dr. Fatima Mansouri",
-    email: "f.mansouri@univ.dz",
-    role: "Professor",
-    department: "Physique",
-    status: "Inactif",
-    lastLogin: "2024-01-10",
-    createdAt: "2023-09-15",
-  },
-  {
-    id: "5",
-    name: "Ms. Sarah Smith",
-    email: "s.smith@univ.dz",
-    role: "Professor",
-    department: "Langues",
-    status: "Actif",
-    lastLogin: "2024-01-13",
-    createdAt: "2023-10-01",
-  },
-]
+interface User {
+  id: string
+  first_name: string
+  last_name: string
+  email: string
+  role: string
+  department_id: string | null
+  department?: {
+    name: string
+  }
+  created_at: string
+  last_login?: string
+  is_active: boolean
+}
+
+interface Department {
+  id: string
+  name: string
+}
 
 const roles = [
-  { value: "Professor", label: "Professeur" },
-  { value: "Department Head", label: "Chef de Département" },
-  { value: "Full Admin", label: "Administrateur Complet" },
-]
-
-const departments = [
-  "Administration",
-  "Architecture",
-  "Mathématiques",
-  "Informatique",
-  "Physique",
-  "Chimie",
-  "Sciences de la Matière",
-  "Sciences de la Nature et de la Vie",
-  "Langues",
+  { value: "professor", label: "Professeur" },
+  { value: "department_head", label: "Chef de Département" },
+  { value: "admin", label: "Administrateur" },
 ]
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState(mockUsers)
+  const [users, setUsers] = useState<User[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [selectedUser, setSelectedUser] = useState<any>(null)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const [newUser, setNewUser] = useState({
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     role: "",
-    department: "",
+    departmentId: "",
     password: "",
   })
 
+  // Enhanced fetch with error handling
+  const fetchData = async (url: string, errorMessage: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      // Check if response is HTML
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('text/html')) {
+        const text = await response.text();
+        if (text.startsWith('<!DOCTYPE html>')) {
+          throw new Error('Server returned HTML instead of JSON. Check API endpoint.');
+        }
+      }
+      
+      if (response.status === 401) {
+        throw new Error('Authentication failed');
+      }
+      
+      if (!response.ok) {
+        // Try to get error message from JSON if possible
+        try {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `HTTP error! Status: ${response.status}`);
+        } catch (jsonError) {
+          throw new Error(`Request failed with status ${response.status}`);
+        }
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error(`${errorMessage}:`, error);
+      toast.error(error instanceof Error ? error.message : errorMessage);
+      throw error;
+    }
+  }
+
+  const fetchUsers = async () => {
+    try {
+      const data = await fetchData('/api/users', 'Erreur lors du chargement des utilisateurs');
+      setUsers(data);
+    } catch (error) {
+      // Error already handled in fetchData
+    }
+  }
+
+  const fetchDepartments = async () => {
+    try {
+      const data = await fetchData('/api/departments', 'Erreur lors du chargement des départements');
+      setDepartments(data);
+    } catch (error) {
+      // Error already handled in fetchData
+    }
+  }
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([fetchUsers(), fetchDepartments()]);
+      } catch (error) {
+        console.error("Error loading data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
+  }, []);
+
   const filteredUsers = users.filter(
     (user) =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.department.toLowerCase().includes(searchTerm.toLowerCase()),
+      user.department?.name?.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  const handleAddUser = () => {
-    const user = {
-      id: (users.length + 1).toString(),
-      ...newUser,
-      status: "Actif",
-      lastLogin: "Jamais",
-      createdAt: new Date().toISOString().split("T")[0],
+  const handleAddUser = async () => {
+    if (!newUser.firstName || !newUser.lastName || !newUser.email || !newUser.role || !newUser.departmentId || !newUser.password) {
+      toast.error('Veuillez remplir tous les champs obligatoires')
+      return
     }
-    setUsers([...users, user])
-    setNewUser({ name: "", email: "", role: "", department: "", password: "" })
-    setIsAddDialogOpen(false)
+
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) throw new Error('Authentication token not found')
+      
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firstName: newUser.firstName,
+          lastName: newUser.lastName,
+          email: newUser.email,
+          password: newUser.password,
+          role: newUser.role,
+          departmentId: newUser.departmentId,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de la création de l\'utilisateur')
+      }
+
+      toast.success('Utilisateur créé avec succès')
+      setNewUser({ firstName: "", lastName: "", email: "", role: "", departmentId: "", password: "" })
+      setIsAddDialogOpen(false)
+      await fetchUsers()
+    } catch (error) {
+      console.error('Error creating user:', error)
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la création de l\'utilisateur')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const handleEditUser = () => {
-    const updatedUsers = users.map((user) => (user.id === selectedUser.id ? selectedUser : user))
-    setUsers(updatedUsers)
-    setIsEditDialogOpen(false)
-    setSelectedUser(null)
+  const handleEditUser = async () => {
+    if (!selectedUser) return
+
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) throw new Error('Authentication token not found')
+      
+      const response = await fetch(`/api/users/${selectedUser.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          firstName: selectedUser.first_name,
+          lastName: selectedUser.last_name,
+          email: selectedUser.email,
+          role: selectedUser.role,
+          departmentId: selectedUser.department_id,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de la mise à jour')
+      }
+
+      toast.success('Utilisateur mis à jour avec succès')
+      setIsEditDialogOpen(false)
+      setSelectedUser(null)
+      await fetchUsers()
+    } catch (error) {
+      console.error('Error updating user:', error)
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la mise à jour')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const handleDeleteUser = (userId: string) => {
-    setUsers(users.filter((user) => user.id !== userId))
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cet utilisateur ?')) return
+
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) throw new Error('Authentication token not found')
+      
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors de la suppression')
+      }
+
+      toast.success('Utilisateur supprimé avec succès')
+      await fetchUsers()
+    } catch (error) {
+      console.error('Error deleting user:', error)
+      toast.error(error instanceof Error ? error.message : 'Erreur lors de la suppression')
+    }
   }
 
-  const handleToggleStatus = (userId: string) => {
-    const updatedUsers = users.map((user) =>
-      user.id === userId ? { ...user, status: user.status === "Actif" ? "Inactif" : "Actif" } : user,
+  const handleToggleStatus = async (userId: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) throw new Error('Authentication token not found')
+      
+      const response = await fetch(`/api/users/${userId}/toggle-status`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Erreur lors du changement de statut')
+      }
+
+      toast.success('Statut mis à jour avec succès')
+      await fetchUsers()
+    } catch (error) {
+      console.error('Error toggling status:', error)
+      toast.error(error instanceof Error ? error.message : 'Erreur lors du changement de statut')
+    }
+  }
+
+  const getStatusBadge = (isActive: boolean) => {
+    return isActive ? (
+      <Badge className="bg-green-100 text-green-800">Actif</Badge>
+    ) : (
+      <Badge className="bg-red-100 text-red-800">Inactif</Badge>
     )
-    setUsers(updatedUsers)
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Actif":
-        return <Badge className="bg-green-100 text-green-800">Actif</Badge>
-      case "Inactif":
-        return <Badge className="bg-red-100 text-red-800">Inactif</Badge>
-      case "Suspendu":
-        return <Badge className="bg-yellow-100 text-yellow-800">Suspendu</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
-    }
   }
 
   const getRoleBadge = (role: string) => {
     switch (role) {
-      case "Full Admin":
-        return <Badge className="bg-red-100 text-red-800">Admin Complet</Badge>
-      case "Department Head":
+      case "admin":
+        return <Badge className="bg-red-100 text-red-800">Administrateur</Badge>
+      case "department_head":
         return <Badge className="bg-blue-100 text-blue-800">Chef de Département</Badge>
-      case "Professor":
+      case "professor":
         return <Badge className="bg-gray-100 text-gray-800">Professeur</Badge>
       default:
         return <Badge variant="secondary">{role}</Badge>
@@ -172,13 +310,28 @@ export default function AdminUsersPage() {
 
   const getRoleIcon = (role: string) => {
     switch (role) {
-      case "Full Admin":
+      case "admin":
         return <Shield className="h-4 w-4 text-red-600" />
-      case "Department Head":
+      case "department_head":
         return <UserCheck className="h-4 w-4 text-blue-600" />
       default:
         return <UserCheck className="h-4 w-4 text-gray-600" />
     }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('fr-FR')
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Chargement des utilisateurs...</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -212,13 +365,24 @@ export default function AdminUsersPage() {
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="name" className="text-right">
-                    Nom complet
+                  <Label htmlFor="firstName" className="text-right">
+                    Prénom
                   </Label>
                   <Input
-                    id="name"
-                    value={newUser.name}
-                    onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                    id="firstName"
+                    value={newUser.firstName}
+                    onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="lastName" className="text-right">
+                    Nom
+                  </Label>
+                  <Input
+                    id="lastName"
+                    value={newUser.lastName}
+                    onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })}
                     className="col-span-3"
                   />
                 </div>
@@ -268,16 +432,16 @@ export default function AdminUsersPage() {
                     Département
                   </Label>
                   <Select
-                    value={newUser.department}
-                    onValueChange={(value) => setNewUser({ ...newUser, department: value })}
+                    value={newUser.departmentId}
+                    onValueChange={(value) => setNewUser({ ...newUser, departmentId: value })}
                   >
                     <SelectTrigger className="col-span-3">
                       <SelectValue placeholder="Sélectionner le département" />
                     </SelectTrigger>
                     <SelectContent>
                       {departments.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -285,8 +449,15 @@ export default function AdminUsersPage() {
                 </div>
               </div>
               <DialogFooter>
-                <Button type="submit" onClick={handleAddUser}>
-                  Créer le Compte
+                <Button type="submit" onClick={handleAddUser} disabled={submitting}>
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Création...
+                    </>
+                  ) : (
+                    'Créer le Compte'
+                  )}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -335,7 +506,7 @@ export default function AdminUsersPage() {
                       <div className="flex items-center">
                         {getRoleIcon(user.role)}
                         <div className="ml-3">
-                          <div className="font-semibold">{user.name}</div>
+                          <div className="font-semibold">{`${user.first_name} ${user.last_name}`}</div>
                           <div className="flex items-center text-sm text-gray-500">
                             <Mail className="h-3 w-3 mr-1" />
                             {user.email}
@@ -344,19 +515,19 @@ export default function AdminUsersPage() {
                       </div>
                     </TableCell>
                     <TableCell>{getRoleBadge(user.role)}</TableCell>
-                    <TableCell>{user.department}</TableCell>
-                    <TableCell>{getStatusBadge(user.status)}</TableCell>
-                    <TableCell>{user.lastLogin}</TableCell>
-                    <TableCell>{user.createdAt}</TableCell>
+                    <TableCell>{user.department?.name || 'Aucun département'}</TableCell>
+                    <TableCell>{getStatusBadge(user.is_active)}</TableCell>
+                    <TableCell>{user.last_login ? formatDate(user.last_login) : 'Jamais'}</TableCell>
+                    <TableCell>{formatDate(user.created_at)}</TableCell>
                     <TableCell>
                       <div className="flex items-center space-x-2">
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleToggleStatus(user.id)}
-                          title={user.status === "Actif" ? "Désactiver" : "Activer"}
+                          title={user.is_active ? "Désactiver" : "Activer"}
                         >
-                          {user.status === "Actif" ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          {user.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </Button>
                         <Button
                           variant="ghost"
@@ -396,7 +567,7 @@ export default function AdminUsersPage() {
           <Card>
             <CardContent className="p-6 text-center">
               <div className="text-2xl font-bold text-green-600">
-                {users.filter((u) => u.status === "Actif").length}
+                {users.filter((u) => u.is_active).length}
               </div>
               <div className="text-sm text-gray-600">Utilisateurs Actifs</div>
             </CardContent>
@@ -404,7 +575,7 @@ export default function AdminUsersPage() {
           <Card>
             <CardContent className="p-6 text-center">
               <div className="text-2xl font-bold text-red-600">
-                {users.filter((u) => u.role === "Full Admin").length}
+                {users.filter((u) => u.role === "admin").length}
               </div>
               <div className="text-sm text-gray-600">Administrateurs</div>
             </CardContent>
@@ -412,7 +583,7 @@ export default function AdminUsersPage() {
           <Card>
             <CardContent className="p-6 text-center">
               <div className="text-2xl font-bold text-purple-600">
-                {users.filter((u) => u.role === "Professor").length}
+                {users.filter((u) => u.role === "professor").length}
               </div>
               <div className="text-sm text-gray-600">Professeurs</div>
             </CardContent>
@@ -429,13 +600,24 @@ export default function AdminUsersPage() {
             {selectedUser && (
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="edit-name" className="text-right">
-                    Nom complet
+                  <Label htmlFor="edit-firstName" className="text-right">
+                    Prénom
                   </Label>
                   <Input
-                    id="edit-name"
-                    value={selectedUser.name}
-                    onChange={(e) => setSelectedUser({ ...selectedUser, name: e.target.value })}
+                    id="edit-firstName"
+                    value={selectedUser.first_name}
+                    onChange={(e) => setSelectedUser({ ...selectedUser, first_name: e.target.value })}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="edit-lastName" className="text-right">
+                    Nom
+                  </Label>
+                  <Input
+                    id="edit-lastName"
+                    value={selectedUser.last_name}
+                    onChange={(e) => setSelectedUser({ ...selectedUser, last_name: e.target.value })}
                     className="col-span-3"
                   />
                 </div>
@@ -476,16 +658,16 @@ export default function AdminUsersPage() {
                     Département
                   </Label>
                   <Select
-                    value={selectedUser.department}
-                    onValueChange={(value) => setSelectedUser({ ...selectedUser, department: value })}
+                    value={selectedUser.department_id ?? undefined}
+                    onValueChange={(value) => setSelectedUser({ ...selectedUser, department_id: value })}
                   >
                     <SelectTrigger className="col-span-3">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {departments.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -494,8 +676,15 @@ export default function AdminUsersPage() {
               </div>
             )}
             <DialogFooter>
-              <Button type="submit" onClick={handleEditUser}>
-                Sauvegarder
+              <Button type="submit" onClick={handleEditUser} disabled={submitting}>
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Sauvegarde...
+                  </>
+                ) : (
+                  'Sauvegarder'
+                )}
               </Button>
             </DialogFooter>
           </DialogContent>

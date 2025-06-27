@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,78 +35,44 @@ import {
   Building,
   Calendar,
   RotateCcw,
+  Loader2,
 } from "lucide-react"
 
-const mockRooms = [
-  {
-    id: "1",
-    name: "Amphi A",
-    type: "Amphithéâtre",
-    capacity: 200,
-    departments: [
-      {
-        name: "Commun",
-        schedule: { type: "full", pattern: "Toute la semaine" },
-      },
-    ],
-    location: "Bâtiment Principal - RDC",
-    equipment: ["Projecteur", "Micro", "Tableau numérique"],
-    status: "Disponible",
-    isShared: false,
-  },
-  {
-    id: "2",
-    name: "Amphi B",
-    type: "Amphithéâtre",
-    capacity: 150,
-    departments: [
-      {
-        name: "Mathématiques",
-        schedule: {
-          type: "weekly",
-          pattern: "Lun-Mer 08:00-12:00, Ven 14:00-18:00",
-        },
-      },
-      {
-        name: "Informatique",
-        schedule: {
-          type: "weekly",
-          pattern: "Mar-Jeu 08:00-18:00, Ven 08:00-12:00",
-        },
-      },
-    ],
-    location: "Bâtiment Principal - 1er étage",
-    equipment: ["Projecteur", "Micro"],
-    status: "Occupée",
-    isShared: true,
-  },
-  {
-    id: "3",
-    name: "Lab Multidisciplinaire",
-    type: "TP",
-    capacity: 30,
-    departments: [
-      {
-        name: "Sciences de la Matière",
-        schedule: {
-          type: "alternating",
-          pattern: "Semaines paires: Lun-Ven 08:00-12:00",
-        },
-      },
-      {
-        name: "Sciences de la Nature et de la Vie",
-        schedule: {
-          type: "alternating",
-          pattern: "Semaines impaires: Lun-Ven 08:00-12:00",
-        },
-      },
-    ],
-    location: "Bâtiment Sciences - RDC",
-    equipment: ["Équipement scientifique", "Tableau blanc"],
-    status: "Disponible",
-    isShared: true,
-  },
-]
+interface Room {
+  id: string
+  name: string
+  code: string
+  type: string
+  capacity: number
+  building: string
+  floor: number
+  equipment: string[] | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+interface DepartmentSchedule {
+  type: string
+  weeklySchedule?: Record<string, string[]>
+  alternatingSchedule?: {
+    evenWeeks: string
+    oddWeeks: string
+  }
+  customSchedule?: string
+}
+
+interface NewRoom {
+  name: string
+  code: string
+  type: string
+  capacity: string
+  building: string
+  floor: string
+  equipment: string
+  selectedDepartments: string[]
+  departmentSchedules: Record<string, DepartmentSchedule>
+}
 
 const departments = [
   "Commun",
@@ -117,7 +83,13 @@ const departments = [
   "Sciences de la Nature et de la Vie",
 ]
 
-const roomTypes = ["Amphithéâtre", "TD", "TP", "Bureau"]
+const roomTypes = [
+  { value: "amphi", label: "Amphithéâtre" },
+  { value: "td", label: "TD" },
+  { value: "tp", label: "TP" },
+  { value: "lab", label: "Laboratoire" },
+  { value: "bureau", label: "Bureau" },
+]
 
 const days = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"]
 const timeSlots = ["08:00-10:00", "10:00-12:00", "12:00-14:00", "14:00-16:00", "16:00-18:00"]
@@ -130,26 +102,64 @@ const scheduleTypes = [
 ]
 
 export default function AdminRoomsPage() {
-  const [rooms, setRooms] = useState(mockRooms)
+  const [rooms, setRooms] = useState<Room[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [selectedRoom, setSelectedRoom] = useState<any>(null)
-  const [newRoom, setNewRoom] = useState({
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
+  const [newRoom, setNewRoom] = useState<NewRoom>({
     name: "",
+    code: "",
     type: "",
     capacity: "",
-    location: "",
+    building: "",
+    floor: "",
     equipment: "",
-    selectedDepartments: [] as string[],
-    departmentSchedules: {} as Record<string, any>,
+    selectedDepartments: [],
+    departmentSchedules: {},
   })
+  const [freeSearchTerm, setFreeSearchTerm] = useState("")
+  const [selectedDay, setSelectedDay] = useState(days[0])
+  const [selectedTimeSlots, setSelectedTimeSlots] = useState<string[]>([timeSlots[0]])
+  const [selectedDepartment, setSelectedDepartment] = useState("Tous")
+  const [selectedType, setSelectedType] = useState("Tous")
+  const [minCapacity, setMinCapacity] = useState("")
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  // Pending states for free rooms filters
+  const [pendingFreeSearchTerm, setPendingFreeSearchTerm] = useState("")
+  const [pendingSelectedDay, setPendingSelectedDay] = useState(days[0])
+  const [pendingSelectedTimeSlots, setPendingSelectedTimeSlots] = useState<string[]>([timeSlots[0]])
+  const [pendingSelectedDepartment, setPendingSelectedDepartment] = useState("Tous")
+  const [pendingSelectedType, setPendingSelectedType] = useState("Tous")
+  const [pendingMinCapacity, setPendingMinCapacity] = useState("")
+
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        setLoading(true)
+        const res = await fetch("http://localhost:5000/api/salles")
+        if (!res.ok) throw new Error("Failed to fetch salles")
+        const data = await res.json()
+        setRooms(data)
+      } catch (error) {
+        console.error("❌ Failed to load salles:", error)
+        setError("Échec du chargement des salles")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchRooms()
+  }, [])
 
   const filteredRooms = rooms.filter(
     (room) =>
       room.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      room.departments.some((dept) => dept.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      room.type.toLowerCase().includes(searchTerm.toLowerCase()),
+      room.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      room.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      room.building.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const handleDepartmentChange = (department: string, checked: boolean) => {
@@ -240,105 +250,136 @@ export default function AdminRoomsPage() {
     }
   }
 
-  const handleAddRoom = () => {
-    const departmentData = newRoom.selectedDepartments.map((dept) => ({
-      name: dept,
-      schedule: {
-        type: newRoom.departmentSchedules[dept]?.type || "full",
-        pattern: generateSchedulePattern(dept),
-      },
-    }))
+  const handleAddRoom = async () => {
+    try {
+      const roomData = {
+        name: newRoom.name,
+        code: newRoom.code,
+        type: newRoom.type,
+        capacity: parseInt(newRoom.capacity),
+        building: newRoom.building,
+        floor: parseInt(newRoom.floor),
+        equipment: newRoom.equipment ? newRoom.equipment.split(",").map(item => item.trim()) : null,
+      }
 
-    const room = {
-      id: (rooms.length + 1).toString(),
-      name: newRoom.name,
-      type: newRoom.type,
-      capacity: Number.parseInt(newRoom.capacity),
-      departments: departmentData,
-      location: newRoom.location,
-      equipment: newRoom.equipment.split(",").map((item) => item.trim()),
-      status: "Disponible",
-      isShared: newRoom.selectedDepartments.length > 1,
+      const res = await fetch("http://localhost:5000/api/salles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(roomData),
+      })
+
+      if (!res.ok) throw new Error("Failed to create room")
+      
+      const createdRoom = await res.json()
+      setRooms([...rooms, createdRoom])
+      
+      setNewRoom({
+        name: "",
+        code: "",
+        type: "",
+        capacity: "",
+        building: "",
+        floor: "",
+        equipment: "",
+        selectedDepartments: [],
+        departmentSchedules: {},
+      })
+      setIsAddDialogOpen(false)
+    } catch (error) {
+      console.error("❌ Failed to create room:", error)
+      setError("Échec de la création de la salle")
     }
-    setRooms([...rooms, room])
-    setNewRoom({
-      name: "",
-      type: "",
-      capacity: "",
-      location: "",
-      equipment: "",
-      selectedDepartments: [],
-      departmentSchedules: {},
-    })
-    setIsAddDialogOpen(false)
   }
 
-  const handleDeleteRoom = (roomId: string) => {
-    setRooms(rooms.filter((room) => room.id !== roomId))
+  const handleDeleteRoom = async (roomId: string) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/salles/${roomId}`, {
+        method: "DELETE",
+      })
+
+      if (!res.ok) throw new Error("Failed to delete room")
+      
+      setRooms(rooms.filter((room) => room.id !== roomId))
+    } catch (error) {
+      console.error("❌ Failed to delete room:", error)
+      setError("Échec de la suppression de la salle")
+    }
   }
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "Disponible":
-        return <Badge className="bg-green-100 text-green-800">Disponible</Badge>
-      case "Occupée":
-        return <Badge className="bg-red-100 text-red-800">Occupée</Badge>
-      case "Maintenance":
-        return <Badge className="bg-yellow-100 text-yellow-800">Maintenance</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
-    }
+  const getStatusBadge = (isActive: boolean) => {
+    return isActive ? (
+      <Badge className="bg-green-100 text-green-800">Active</Badge>
+    ) : (
+      <Badge className="bg-red-100 text-red-800">Inactive</Badge>
+    )
   }
 
   const getRoomIcon = (type: string) => {
     switch (type) {
-      case "Amphithéâtre":
+      case "amphi":
         return <Users className="h-4 w-4" />
-      case "TP":
+      case "tp":
+      case "lab":
         return <Monitor className="h-4 w-4" />
       default:
         return <MapPin className="h-4 w-4" />
     }
   }
 
-  const getScheduleIcon = (scheduleType: string) => {
-    switch (scheduleType) {
-      case "weekly":
-        return <Calendar className="h-3 w-3" />
-      case "alternating":
-        return <RotateCcw className="h-3 w-3" />
-      default:
-        return <Clock className="h-3 w-3" />
-    }
+  const getRoomTypeLabel = (type: string) => {
+    const roomType = roomTypes.find(rt => rt.value === type)
+    return roomType ? roomType.label : type
   }
 
-  const getDepartmentDisplay = (room: any) => {
-    if (!room.isShared) {
-      return (
-        <div className="flex items-center">
-          <Building className="h-3 w-3 mr-1" />
-          <span>{room.departments[0].name}</span>
-        </div>
-      )
-    }
+  const getLocationDisplay = (room: Room) => {
+    return `${room.building} - ${room.floor === 0 ? 'RDC' : `Étage ${room.floor}`}`
+  }
 
+  function isRoomFree(room: Room, day: string, timeSlots: string[]): boolean {
+    return true
+  }
+
+  const freeRooms = rooms.filter((room: Room) => {
+    const isFree = isRoomFree(room, selectedDay, selectedTimeSlots)
+    const matchesSearch = room.name.toLowerCase().includes(freeSearchTerm.toLowerCase()) ||
+      room.building.toLowerCase().includes(freeSearchTerm.toLowerCase())
+    const matchesDepartment = true // Always true until departments are available on Room
+    const matchesType = selectedType === "Tous" || getRoomTypeLabel(room.type) === selectedType
+    const matchesCapacity = !minCapacity || room.capacity >= parseInt(minCapacity)
+    return isFree && matchesSearch && matchesDepartment && matchesType && matchesCapacity
+  })
+
+  const resetFilters = () => {
+    setFreeSearchTerm("")
+    setSelectedDay(days[0])
+    setSelectedTimeSlots([timeSlots[0]])
+    setSelectedDepartment("Tous")
+    setSelectedType("Tous")
+    setMinCapacity("")
+  }
+
+  if (loading) {
     return (
-      <div className="space-y-2">
-        <div className="flex items-center">
-          <Building className="h-3 w-3 mr-1" />
-          <Badge variant="outline" className="text-xs">
-            Partagée
-          </Badge>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <span>Chargement des salles...</span>
         </div>
-        {room.departments.map((dept: any, index: number) => (
-          <div key={index} className="text-xs border-l-2 border-gray-200 pl-2">
-            <div className="font-medium text-gray-800">{dept.name}</div>
-            <div className="flex items-center mt-1 text-gray-600">
-              {getScheduleIcon(dept.schedule.type)}
-              <span className="ml-1 text-xs">{dept.schedule.pattern}</span>
-            </div>
-          </div>
-        ))}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-600 mb-4">{error}</div>
+          <Button onClick={() => window.location.reload()}>
+            Réessayer
+          </Button>
+        </div>
       </div>
     )
   }
@@ -346,347 +387,434 @@ export default function AdminRoomsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center">
-            <Link href="/admin">
-              <Button variant="ghost" size="sm" className="mr-4">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Retour
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Gestion des Salles</h1>
-              <p className="text-gray-600">Gérer toutes les salles de l'université</p>
+        <Tabs defaultValue="manage" className="w-full">
+          <TabsList className="mb-8">
+            <TabsTrigger value="manage">Gestion des Salles</TabsTrigger>
+            <TabsTrigger value="free">Salles Libres</TabsTrigger>
+          </TabsList>
+          <TabsContent value="manage">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <Link href="/admin">
+                  <Button variant="ghost" size="sm" className="mr-4">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Retour
+                  </Button>
+                </Link>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">Gestion des Salles</h1>
+                  <p className="text-gray-600">Gérer toutes les salles de l'université</p>
+                </div>
+              </div>
+              <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Ajouter une Salle
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Ajouter une Nouvelle Salle</DialogTitle>
+                    <DialogDescription>
+                      Remplissez les informations de la nouvelle salle.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-6 py-4">
+                    {/* Basic Information */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Nom de la salle</Label>
+                        <Input
+                          id="name"
+                          value={newRoom.name}
+                          onChange={(e) => setNewRoom({ ...newRoom, name: e.target.value })}
+                          placeholder="Ex: Amphithéâtre A"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="code">Code</Label>
+                        <Input
+                          id="code"
+                          value={newRoom.code}
+                          onChange={(e) => setNewRoom({ ...newRoom, code: e.target.value })}
+                          placeholder="Ex: AMPHI-A"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="type">Type</Label>
+                        <Select value={newRoom.type} onValueChange={(value) => setNewRoom({ ...newRoom, type: value })}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sélectionner le type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {roomTypes.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="capacity">Capacité</Label>
+                        <Input
+                          id="capacity"
+                          type="number"
+                          value={newRoom.capacity}
+                          onChange={(e) => setNewRoom({ ...newRoom, capacity: e.target.value })}
+                          placeholder="Ex: 50"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="building">Bâtiment</Label>
+                        <Input
+                          id="building"
+                          value={newRoom.building}
+                          onChange={(e) => setNewRoom({ ...newRoom, building: e.target.value })}
+                          placeholder="Ex: Bâtiment Principal"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="floor">Étage</Label>
+                        <Input
+                          id="floor"
+                          type="number"
+                          value={newRoom.floor}
+                          onChange={(e) => setNewRoom({ ...newRoom, floor: e.target.value })}
+                          placeholder="Ex: 0 pour RDC"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="equipment">Équipements (optionnel)</Label>
+                      <Textarea
+                        id="equipment"
+                        placeholder="Séparer par des virgules (Ex: Projecteur, Micro, Tableau numérique)"
+                        value={newRoom.equipment}
+                        onChange={(e) => setNewRoom({ ...newRoom, equipment: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button 
+                      type="submit" 
+                      onClick={handleAddRoom} 
+                      disabled={!newRoom.name || !newRoom.code || !newRoom.type || !newRoom.capacity || !newRoom.building}
+                    >
+                      Ajouter la Salle
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
-          </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Ajouter une Salle
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Ajouter une Nouvelle Salle</DialogTitle>
-                <DialogDescription>
-                  Remplissez les informations de la nouvelle salle et configurez les horaires d'accès.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-6 py-4">
-                {/* Basic Information */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nom de la salle</Label>
+
+            {/* Search and Filters */}
+            <Card className="mb-6">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                     <Input
-                      id="name"
-                      value={newRoom.name}
-                      onChange={(e) => setNewRoom({ ...newRoom, name: e.target.value })}
+                      placeholder="Rechercher par nom, code, type ou bâtiment..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Type</Label>
-                    <Select value={newRoom.type} onValueChange={(value) => setNewRoom({ ...newRoom, type: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionner le type" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Rooms Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Liste des Salles ({filteredRooms.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nom</TableHead>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Capacité</TableHead>
+                      <TableHead>Localisation</TableHead>
+                      <TableHead>Équipements</TableHead>
+                      <TableHead>Statut</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredRooms.map((room) => (
+                      <TableRow key={room.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center">
+                            {getRoomIcon(room.type)}
+                            <span className="ml-2">{room.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{room.code}</TableCell>
+                        <TableCell>{getRoomTypeLabel(room.type)}</TableCell>
+                        <TableCell>{room.capacity} places</TableCell>
+                        <TableCell>{getLocationDisplay(room)}</TableCell>
+                        <TableCell className="max-w-xs">
+                          {room.equipment && room.equipment.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {room.equipment.slice(0, 2).map((eq, index) => (
+                                <Badge key={index} variant="outline" className="text-xs">
+                                  {eq}
+                                </Badge>
+                              ))}
+                              {room.equipment.length > 2 && (
+                                <Badge variant="outline" className="text-xs">
+                                  +{room.equipment.length - 2}
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-sm">Aucun</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(room.is_active)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Link href={`/salles/${room.id}`}>
+                              <Button variant="ghost" size="sm">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedRoom(room)
+                                setIsEditDialogOpen(true)
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteRoom(room.id)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {filteredRooms.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    Aucune salle trouvée
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          <TabsContent value="free">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <h1 className="text-3xl font-bold text-gray-900">Salles Libres</h1>
+                <p className="text-gray-600 ml-4">Trouver des salles disponibles selon vos critères</p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                >
+                  <span>Filtres Avancés</span>
+                </Button>
+                <Button variant="outline" onClick={resetFilters}>
+                  <span>Réinitialiser</span>
+                </Button>
+              </div>
+            </div>
+            <Card className="mb-6">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Input
+                      placeholder="Rechercher par nom ou localisation..."
+                      value={pendingFreeSearchTerm}
+                      onChange={(e) => setPendingFreeSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div>
+                    <Label>Jour</Label>
+                    <Select value={pendingSelectedDay} onValueChange={setPendingSelectedDay}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {roomTypes.map((type) => (
-                          <SelectItem key={type} value={type}>
-                            {type}
-                          </SelectItem>
+                        {days.map((day) => (
+                          <SelectItem key={day} value={day}>{day}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="capacity">Capacité</Label>
-                    <Input
-                      id="capacity"
-                      type="number"
-                      value={newRoom.capacity}
-                      onChange={(e) => setNewRoom({ ...newRoom, capacity: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="location">Localisation</Label>
-                    <Input
-                      id="location"
-                      value={newRoom.location}
-                      onChange={(e) => setNewRoom({ ...newRoom, location: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="equipment">Équipements</Label>
-                  <Textarea
-                    id="equipment"
-                    placeholder="Séparer par des virgules"
-                    value={newRoom.equipment}
-                    onChange={(e) => setNewRoom({ ...newRoom, equipment: e.target.value })}
-                  />
-                </div>
-
-                {/* Department Selection */}
-                <div className="space-y-4">
-                  <Label className="text-base font-semibold">Départements et Horaires d'Accès</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    {departments.map((dept) => (
-                      <div key={dept} className="space-y-2">
-                        <div className="flex items-center space-x-2">
+                  <div>
+                    <Label>Créneaux</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {timeSlots.map((slot) => (
+                        <label key={slot} className="flex items-center space-x-1">
                           <Checkbox
-                            id={dept}
-                            checked={newRoom.selectedDepartments.includes(dept)}
-                            onCheckedChange={(checked) => handleDepartmentChange(dept, checked as boolean)}
+                            checked={pendingSelectedTimeSlots.includes(slot)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setPendingSelectedTimeSlots([...pendingSelectedTimeSlots, slot])
+                              } else {
+                                setPendingSelectedTimeSlots(pendingSelectedTimeSlots.filter((s) => s !== slot))
+                              }
+                            }}
+                            id={`slot-${slot}`}
                           />
-                          <Label htmlFor={dept} className="font-medium">
-                            {dept}
-                          </Label>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Schedule Configuration */}
-                {newRoom.selectedDepartments.length > 0 && (
-                  <div className="space-y-4">
-                    <Label className="text-base font-semibold">Configuration des Horaires</Label>
-                    <Tabs defaultValue={newRoom.selectedDepartments[0]} className="w-full">
-                      <TabsList className="grid w-full grid-cols-3">
-                        {newRoom.selectedDepartments.slice(0, 3).map((dept) => (
-                          <TabsTrigger key={dept} value={dept} className="text-xs">
-                            {dept}
-                          </TabsTrigger>
-                        ))}
-                      </TabsList>
-                      {newRoom.selectedDepartments.map((dept) => (
-                        <TabsContent key={dept} value={dept} className="space-y-4">
-                          <div className="space-y-2">
-                            <Label>Type de planning pour {dept}</Label>
-                            <Select
-                              value={newRoom.departmentSchedules[dept]?.type || "full"}
-                              onValueChange={(value) => handleScheduleTypeChange(dept, value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {scheduleTypes.map((type) => (
-                                  <SelectItem key={type.value} value={type.value}>
-                                    {type.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          {newRoom.departmentSchedules[dept]?.type === "weekly" && (
-                            <div className="space-y-3">
-                              <Label className="text-sm font-medium">Horaires hebdomadaires</Label>
-                              <div className="grid gap-3">
-                                {days.map((day) => (
-                                  <div key={day} className="space-y-2">
-                                    <Label className="text-sm">{day}</Label>
-                                    <div className="flex flex-wrap gap-2">
-                                      {timeSlots.map((slot) => (
-                                        <div key={slot} className="flex items-center space-x-2">
-                                          <Checkbox
-                                            id={`${dept}-${day}-${slot}`}
-                                            checked={
-                                              newRoom.departmentSchedules[dept]?.weeklySchedule?.[day]?.includes(
-                                                slot,
-                                              ) || false
-                                            }
-                                            onCheckedChange={(checked) =>
-                                              handleWeeklyScheduleChange(dept, day, slot, checked as boolean)
-                                            }
-                                          />
-                                          <Label htmlFor={`${dept}-${day}-${slot}`} className="text-xs">
-                                            {slot}
-                                          </Label>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {newRoom.departmentSchedules[dept]?.type === "alternating" && (
-                            <div className="space-y-3">
-                              <Label className="text-sm font-medium">Planning alternatif</Label>
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                  <Label className="text-sm">Semaines paires</Label>
-                                  <Input
-                                    placeholder="Ex: Lun-Ven 08:00-12:00"
-                                    value={newRoom.departmentSchedules[dept]?.alternatingSchedule?.evenWeeks || ""}
-                                    onChange={(e) =>
-                                      setNewRoom({
-                                        ...newRoom,
-                                        departmentSchedules: {
-                                          ...newRoom.departmentSchedules,
-                                          [dept]: {
-                                            ...newRoom.departmentSchedules[dept],
-                                            alternatingSchedule: {
-                                              ...newRoom.departmentSchedules[dept]?.alternatingSchedule,
-                                              evenWeeks: e.target.value,
-                                            },
-                                          },
-                                        },
-                                      })
-                                    }
-                                  />
-                                </div>
-                                <div className="space-y-2">
-                                  <Label className="text-sm">Semaines impaires</Label>
-                                  <Input
-                                    placeholder="Ex: Mar-Jeu 14:00-18:00"
-                                    value={newRoom.departmentSchedules[dept]?.alternatingSchedule?.oddWeeks || ""}
-                                    onChange={(e) =>
-                                      setNewRoom({
-                                        ...newRoom,
-                                        departmentSchedules: {
-                                          ...newRoom.departmentSchedules,
-                                          [dept]: {
-                                            ...newRoom.departmentSchedules[dept],
-                                            alternatingSchedule: {
-                                              ...newRoom.departmentSchedules[dept]?.alternatingSchedule,
-                                              oddWeeks: e.target.value,
-                                            },
-                                          },
-                                        },
-                                      })
-                                    }
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {newRoom.departmentSchedules[dept]?.type === "custom" && (
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">Planning personnalisé</Label>
-                              <Textarea
-                                placeholder="Décrivez le planning personnalisé..."
-                                value={newRoom.departmentSchedules[dept]?.customSchedule || ""}
-                                onChange={(e) =>
-                                  setNewRoom({
-                                    ...newRoom,
-                                    departmentSchedules: {
-                                      ...newRoom.departmentSchedules,
-                                      [dept]: {
-                                        ...newRoom.departmentSchedules[dept],
-                                        customSchedule: e.target.value,
-                                      },
-                                    },
-                                  })
-                                }
-                              />
-                            </div>
-                          )}
-
-                          <div className="p-3 bg-gray-50 rounded-lg">
-                            <Label className="text-sm font-medium">Aperçu du planning:</Label>
-                            <p className="text-sm text-gray-600 mt-1">{generateSchedulePattern(dept)}</p>
-                          </div>
-                        </TabsContent>
+                          <span>{slot}</span>
+                        </label>
                       ))}
-                    </Tabs>
+                    </div>
                   </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button type="submit" onClick={handleAddRoom} disabled={newRoom.selectedDepartments.length === 0}>
-                  Ajouter la Salle
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-
-        {/* Search and Filters */}
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Rechercher par nom, département ou type..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+                  <Button onClick={() => {
+                    setFreeSearchTerm(pendingFreeSearchTerm)
+                    setSelectedDay(pendingSelectedDay)
+                    setSelectedTimeSlots(pendingSelectedTimeSlots)
+                    setSelectedDepartment(pendingSelectedDepartment)
+                    setSelectedType(pendingSelectedType)
+                    setMinCapacity(pendingMinCapacity)
+                  }}>
+                    Filtrer
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+            {showAdvancedFilters && (
+              <Card className="mb-6">
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                      <Label>Département</Label>
+                      <Select value={pendingSelectedDepartment} onValueChange={setPendingSelectedDepartment}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["Tous", ...departments].map((dept) => (
+                            <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Type de Salle</Label>
+                      <Select value={pendingSelectedType} onValueChange={setPendingSelectedType}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {["Tous", ...roomTypes.map(rt => rt.label)].map((type) => (
+                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Capacité Minimum</Label>
+                      <Input
+                        type="number"
+                        placeholder="Ex: 30"
+                        value={pendingMinCapacity}
+                        onChange={(e) => setPendingMinCapacity(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <Button variant="outline" onClick={resetFilters} className="w-full">
+                        Réinitialiser
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            <div className="mb-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    Salles Libres ({freeRooms.length})
+                  </h2>
+                  <p className="text-gray-600">
+                    Pour le {selectedDay} de {selectedTimeSlots.join(", ")}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Total des salles</p>
+                  <p className="text-2xl font-bold text-blue-600">{rooms.length}</p>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Rooms Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Liste des Salles ({filteredRooms.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Capacité</TableHead>
-                  <TableHead>Département(s) et Horaires</TableHead>
-                  <TableHead>Localisation</TableHead>
-                  <TableHead>Statut</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredRooms.map((room) => (
-                  <TableRow key={room.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center">
-                        {getRoomIcon(room.type)}
-                        <span className="ml-2">{room.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{room.type}</TableCell>
-                    <TableCell>{room.capacity} places</TableCell>
-                    <TableCell className="max-w-xs">{getDepartmentDisplay(room)}</TableCell>
-                    <TableCell>{room.location}</TableCell>
-                    <TableCell>{getStatusBadge(room.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <Link href={`/salles/${room.id}`}>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteRoom(room.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nom</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Capacité</TableHead>
+                      <TableHead>Localisation</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {freeRooms.map((room) => (
+                      <TableRow key={room.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center">
+                            {getRoomIcon(room.type)}
+                            <span className="ml-2">{room.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{getRoomTypeLabel(room.type)}</TableCell>
+                        <TableCell>{room.capacity} places</TableCell>
+                        <TableCell>{getLocationDisplay(room)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <Link href={`/salles/${room.id}`}>
+                              <Button variant="ghost" size="sm">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </Link>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {freeRooms.length === 0 && (
+                  <div className="text-center py-12 text-gray-500">
+                    <MapPin className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg font-medium mb-2">Aucune salle libre trouvée</p>
+                    <p className="text-sm">
+                      Essayez de modifier vos critères de recherche ou de changer le créneau horaire.
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

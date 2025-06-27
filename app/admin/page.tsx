@@ -1,13 +1,47 @@
+"use client"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Users, MapPin, Calendar, Building, UserCheck, BarChart3, Clock, BookOpen, Settings } from "lucide-react"
 
+// Simple auth hook
+type User = {
+  first_name: string
+  last_name: string
+  role: string
+  // add other properties if needed
+}
+
+function useAuth() {
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Check if user is logged in
+    const userData = localStorage.getItem('userData')
+    if (userData) {
+      const parsedUser = JSON.parse(userData)
+      // Check if user is admin
+      if (parsedUser.role !== 'admin') {
+        window.location.href = '/login'
+        return
+      }
+      setUser(parsedUser)
+    } else {
+      window.location.href = '/login'
+      return
+    }
+    setLoading(false)
+  }, [])
+
+  return { user, loading }
+}
+
 const adminStats = [
   { title: "Total Professeurs", value: "45", icon: Users, color: "text-blue-600" },
   { title: "Salles Disponibles", value: "28", icon: MapPin, color: "text-green-600" },
   { title: "Emplois du Temps", value: "15", icon: Calendar, color: "text-purple-600" },
-  { title: "Départements", value: "5", icon: Building, color: "text-orange-600" },
 ]
 
 const quickActions = [
@@ -33,10 +67,10 @@ const quickActions = [
     color: "bg-purple-500",
   },
   {
-    title: "Salles Libres",
-    description: "Voir la disponibilité des salles",
-    href: "/salles-libres",
-    icon: Clock,
+    title: "Rapports",
+    description: "Statistiques et analyses globales de la faculté",
+    href: "/admin/rapports",
+    icon: BarChart3,
     color: "bg-orange-500",
   },
   {
@@ -56,6 +90,21 @@ const quickActions = [
 ]
 
 export default function AdminDashboard() {
+  const { user, loading } = useAuth()
+
+  const handleLogout = () => {
+    localStorage.removeItem('userData')
+    window.location.href = '/login'
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="p-6 text-gray-600">Chargement...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -64,23 +113,26 @@ export default function AdminDashboard() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Tableau de Bord Admin</h1>
             <p className="text-gray-600">Système de Gestion des Emplois du Temps</p>
+            {user && (
+              <p className="text-sm text-gray-500 mt-1">
+                Bienvenue, {user.first_name} {user.last_name}
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
-            <Link href="/">
-              <Button variant="outline">Retour à l'accueil</Button>
-            </Link>
             <Link href="/admin/parametres">
               <Button variant="outline">
                 <Settings className="h-4 w-4 mr-2" />
                 Paramètres
               </Button>
             </Link>
-            <Button variant="outline">Déconnexion</Button>
+            <Button variant="outline" onClick={handleLogout}>
+              Déconnexion
+            </Button>
           </div>
         </div>
-
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {adminStats.map((stat) => {
             const IconComponent = stat.icon
             return (
@@ -108,7 +160,7 @@ export default function AdminDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {quickActions.map((action) => {
                 const IconComponent = action.icon
                 return (
@@ -133,42 +185,7 @@ export default function AdminDashboard() {
               })}
             </div>
           </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <BookOpen className="h-5 w-5 mr-2" />
-              Activité Récente
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center p-3 bg-blue-50 rounded-lg">
-                <Calendar className="h-5 w-5 text-blue-600 mr-3" />
-                <div>
-                  <p className="font-medium">Emploi du temps L2 Informatique mis à jour</p>
-                  <p className="text-sm text-gray-600">Il y a 2 heures</p>
-                </div>
-              </div>
-              <div className="flex items-center p-3 bg-green-50 rounded-lg">
-                <MapPin className="h-5 w-5 text-green-600 mr-3" />
-                <div>
-                  <p className="font-medium">Nouvelle salle Lab Physique 2 ajoutée</p>
-                  <p className="text-sm text-gray-600">Il y a 5 heures</p>
-                </div>
-              </div>
-              <div className="flex items-center p-3 bg-purple-50 rounded-lg">
-                <Users className="h-5 w-5 text-purple-600 mr-3" />
-                <div>
-                  <p className="font-medium">Professeur Dr. Benali - horaires modifiés</p>
-                  <p className="text-sm text-gray-600">Hier</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        </Card>        
       </div>
     </div>
   )

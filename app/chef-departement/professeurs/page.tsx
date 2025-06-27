@@ -32,7 +32,6 @@ const mockProfessors = [
     subjects: ["Programmation", "Base de Données", "Réseaux"],
     status: "Actif",
     grade: "Professeur",
-    office: "Bureau 301",
   },
   {
     id: "2",
@@ -83,7 +82,6 @@ export default function ChefDepartementProfessorsPage() {
     phone: "",
     subjects: "",
     grade: "",
-    office: "",
   })
 
   const filteredProfessors = professors.filter(
@@ -101,7 +99,7 @@ export default function ChefDepartementProfessorsPage() {
       status: "Actif",
     }
     setProfessors([...professors, professor])
-    setNewProfessor({ name: "", email: "", phone: "", subjects: "", grade: "", office: "" })
+    setNewProfessor({ name: "", email: "", phone: "", subjects: "", grade: ""})
     setIsAddDialogOpen(false)
   }
 
@@ -224,17 +222,6 @@ export default function ChefDepartementProfessorsPage() {
                   </Select>
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="office" className="text-right">
-                    Bureau
-                  </Label>
-                  <Input
-                    id="office"
-                    value={newProfessor.office}
-                    onChange={(e) => setNewProfessor({ ...newProfessor, office: e.target.value })}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
                   <Label htmlFor="subjects" className="text-right">
                     Matières
                   </Label>
@@ -295,9 +282,7 @@ export default function ChefDepartementProfessorsPage() {
                       <div className="flex items-center">
                         <User className="h-4 w-4 mr-2" />
                         <div>
-                          <div>{professor.name}</div>
-                          <div className="text-sm text-gray-500">{professor.office}</div>
-                        </div>
+                          <div>{professor.name}</div>                        </div>
                       </div>
                     </TableCell>
                     <TableCell>{professor.grade}</TableCell>

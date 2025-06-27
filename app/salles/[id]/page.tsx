@@ -139,10 +139,6 @@ export default async function RoomTimetablePage({
                 <p className="font-semibold">{room.type}</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600">Capacité</p>
-                <p className="font-semibold">{room.capacity} places</p>
-              </div>
-              <div>
                 <p className="text-sm text-gray-600">Département</p>
                 <p className="font-semibold">{room.department}</p>
               </div>
@@ -159,6 +155,11 @@ export default async function RoomTimetablePage({
             </div>
           </CardContent>
         </Card>
+
+        {/* Add button after filters/room info */}
+        <div className="flex justify-end mb-8">
+          <Button className="bg-blue-600 text-white hover:bg-blue-700 transition-colors">Nouvelle Action</Button>
+        </div>
 
         {/* Timetable */}
         <Card>
