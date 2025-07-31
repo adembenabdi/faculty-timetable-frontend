@@ -1,42 +1,10 @@
 "use client"
+
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Users, MapPin, Calendar, Building, UserCheck, BarChart3, Clock, BookOpen, Settings } from "lucide-react"
-
-// Simple auth hook
-type User = {
-  first_name: string
-  last_name: string
-  role: string
-  // add other properties if needed
-}
-
-function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    // Check if user is logged in
-    const userData = localStorage.getItem('userData')
-    if (userData) {
-      const parsedUser = JSON.parse(userData)
-      // Check if user is admin
-      if (parsedUser.role !== 'admin') {
-        window.location.href = '/login'
-        return
-      }
-      setUser(parsedUser)
-    } else {
-      window.location.href = '/login'
-      return
-    }
-    setLoading(false)
-  }, [])
-
-  return { user, loading }
-}
+import { Users, MapPin, Calendar, Building, UserCheck, BarChart3, Settings } from "lucide-react"
 
 const adminStats = [
   { title: "Total Professeurs", value: "45", icon: Users, color: "text-blue-600" },
@@ -90,21 +58,6 @@ const quickActions = [
 ]
 
 export default function AdminDashboard() {
-  const { user, loading } = useAuth()
-
-  const handleLogout = () => {
-    localStorage.removeItem('userData')
-    window.location.href = '/login'
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="p-6 text-gray-600">Chargement...</div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8">
@@ -113,11 +66,6 @@ export default function AdminDashboard() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Tableau de Bord Admin</h1>
             <p className="text-gray-600">Système de Gestion des Emplois du Temps</p>
-            {user && (
-              <p className="text-sm text-gray-500 mt-1">
-                Bienvenue, {user.first_name} {user.last_name}
-              </p>
-            )}
           </div>
           <div className="flex gap-2">
             <Link href="/admin/parametres">
@@ -126,11 +74,12 @@ export default function AdminDashboard() {
                 Paramètres
               </Button>
             </Link>
-            <Button variant="outline" onClick={handleLogout}>
+            <Button variant="outline" onClick={() => alert("Logout action")}>
               Déconnexion
             </Button>
           </div>
         </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {adminStats.map((stat) => {
@@ -185,7 +134,7 @@ export default function AdminDashboard() {
               })}
             </div>
           </CardContent>
-        </Card>        
+        </Card>
       </div>
     </div>
   )

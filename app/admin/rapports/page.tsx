@@ -214,16 +214,195 @@ export default function RapportsPage() {
           <TabsTrigger value="classes">Emploi des Classes</TabsTrigger>
         </TabsList>
         <TabsContent value="utilisation">
-          {/* Room Utilization Table (reuse logic) */}
-          {/* ... (copy from chef-departement) ... */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Utilisation des Salles</CardTitle>
+              <CardDescription>
+                Taux d'utilisation des salles du département d'Informatique pour{" "}
+                {dateRange === "semestre"
+                  ? "le semestre actuel"
+                  : dateRange === "annee"
+                    ? "l'année académique"
+                    : dateRange === "mois"
+                      ? "le mois en cours"
+                      : "la semaine en cours"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="py-3 px-4 text-left">Salle</th>
+                      <th className="py-3 px-4 text-left">Type</th>
+                      <th className="py-3 px-4 text-left">Capacité</th>
+                      <th className="py-3 px-4 text-left">Heures/Semaine</th>
+                      <th className="py-3 px-4 text-left">Utilisation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {roomUtilizationData.map((room, index) => (
+                      <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-muted/20"}>
+                        <td className="py-3 px-4 font-medium">{room.room}</td>
+                        <td className="py-3 px-4">{room.type}</td>
+                        <td className="py-3 px-4">{room.capacity} places</td>
+                        <td className="py-3 px-4">{room.hours}h</td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-medium ${getUtilizationColor(room.utilization)}`}>
+                              {room.utilization}%
+                            </span>
+                            <div className="w-24 h-2 bg-gray-200 rounded-full">
+                              <div
+                                className={`h-2 rounded-full ${
+                                  room.utilization >= 90
+                                    ? "bg-red-500"
+                                    : room.utilization >= 75
+                                      ? "bg-green-500"
+                                      : room.utilization >= 60
+                                        ? "bg-blue-500"
+                                        : "bg-yellow-500"
+                                }`}
+                                style={{ width: `${room.utilization}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-between items-center mt-4">
+                <p className="text-sm text-gray-500">Affichage de {roomUtilizationData.length} salles</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">
+                    Voir plus de détails
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1">
+                    <FileDown className="h-4 w-4" />
+                    Exporter
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
-        <TabsContent value="professeurs">
-          {/* Professor Workload Table (reuse logic) */}
-          {/* ... (copy from chef-departement) ... */}
+
+        {/* Professor Workload Tab */}
+        <TabsContent value="charge">
+          <Card>
+            <CardHeader>
+              <CardTitle>Charge des Professeurs</CardTitle>
+              <CardDescription>
+                Répartition de la charge d'enseignement des professeurs du département pour{" "}
+                {dateRange === "semestre"
+                  ? "le semestre actuel"
+                  : dateRange === "annee"
+                    ? "l'année académique"
+                    : dateRange === "mois"
+                      ? "le mois en cours"
+                      : "la semaine en cours"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="py-3 px-4 text-left">Professeur</th>
+                      <th className="py-3 px-4 text-left">Heures/Semaine</th>
+                      <th className="py-3 px-4 text-left">Cours</th>
+                      <th className="py-3 px-4 text-left">Étudiants</th>
+                      <th className="py-3 px-4 text-left">Statut</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {professorWorkloadData.map((professor, index) => (
+                      <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-muted/20"}>
+                        <td className="py-3 px-4 font-medium">{professor.name}</td>
+                        <td className="py-3 px-4">{professor.hours}h</td>
+                        <td className="py-3 px-4">{professor.courses}</td>
+                        <td className="py-3 px-4">{professor.students}</td>
+                        <td className="py-3 px-4">
+                          <Badge className={getStatusColor(professor.status)}>{professor.status}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-between items-center mt-4">
+                <p className="text-sm text-gray-500">Affichage de {professorWorkloadData.length} professeurs</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">
+                    Voir plus de détails
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1">
+                    <FileDown className="h-4 w-4" />
+                    Exporter
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
-        <TabsContent value="classes">
-          {/* Class Schedule Table (reuse logic) */}
-          {/* ... (copy from chef-departement) ... */}
+
+        {/* Class Schedule Tab */}
+        <TabsContent value="emplois">
+          <Card>
+            <CardHeader>
+              <CardTitle>Emplois du Temps par Classe</CardTitle>
+              <CardDescription>
+                Statistiques des emplois du temps par classe pour{" "}
+                {dateRange === "semestre"
+                  ? "le semestre actuel"
+                  : dateRange === "annee"
+                    ? "l'année académique"
+                    : dateRange === "mois"
+                      ? "le mois en cours"
+                      : "la semaine en cours"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="py-3 px-4 text-left">Classe</th>
+                      <th className="py-3 px-4 text-left">Cours</th>
+                      <th className="py-3 px-4 text-left">Heures/Semaine</th>
+                      <th className="py-3 px-4 text-left">Professeurs</th>
+                      <th className="py-3 px-4 text-left">Étudiants</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {classScheduleData.map((classItem, index) => (
+                      <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-muted/20"}>
+                        <td className="py-3 px-4 font-medium">{classItem.class}</td>
+                        <td className="py-3 px-4">{classItem.courses}</td>
+                        <td className="py-3 px-4">{classItem.hours}h</td>
+                        <td className="py-3 px-4">{classItem.professors}</td>
+                        <td className="py-3 px-4">{classItem.students}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex justify-between items-center mt-4">
+                <p className="text-sm text-gray-500">Affichage de {classScheduleData.length} classes</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">
+                    Voir plus de détails
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1">
+                    <FileDown className="h-4 w-4" />
+                    Exporter
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

@@ -1,9 +1,20 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Users, MapPin, Calendar, Building, UserCheck, BarChart3, Clock, BookOpen, Settings } from "lucide-react"
+import {
+  Users,
+  MapPin,
+  Calendar,
+  Building,
+  UserCheck,
+  BarChart3,
+  Clock,
+  BookOpen,
+  Settings,
+} from "lucide-react"
 
-// Mock data for department head - only their department
 const departmentStats = [
   { title: "Professeurs du Département", value: "18", icon: Users, color: "text-blue-600" },
   { title: "Salles Assignées", value: "10", icon: MapPin, color: "text-green-600" },
@@ -76,7 +87,9 @@ export default function ChefDepartementDashboard() {
                 Mon Profil
               </Button>
             </Link>
-            <Button variant="outline">Déconnexion</Button>
+            <Button variant="outline" onClick={() => alert("Déconnexion... bientôt")}>
+              Déconnexion
+            </Button>
           </div>
         </div>
 

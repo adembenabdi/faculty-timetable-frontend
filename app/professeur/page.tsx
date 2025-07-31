@@ -17,7 +17,6 @@ const professorStats = [
   { title: "Heures/Semaine", value: "12", icon: Clock, color: "text-blue-600" },
   { title: "Classes Enseignées", value: "5", icon: Users, color: "text-green-600" },
   { title: "Matières", value: "3", icon: BookOpen, color: "text-purple-600" },
-  { title: "Salles Utilisées", value: "4", icon: MapPin, color: "text-orange-600" },
 ]
 
 const quickActions = [
@@ -35,13 +34,7 @@ const quickActions = [
     icon: Users,
     color: "bg-green-500",
   },
-  {
-    title: "Salles Libres",
-    description: "Trouver des salles disponibles",
-    href: "/salles-libres",
-    icon: MapPin,
-    color: "bg-purple-500",
-  },
+
   {
     title: "Mon Profil",
     description: "Gérer mes informations personnelles",
@@ -148,7 +141,7 @@ export default function ProfesseurDashboard() {
         </Card>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {professorStats.map((stat) => {
             const IconComponent = stat.icon
             return (
@@ -173,7 +166,7 @@ export default function ProfesseurDashboard() {
             <CardTitle>Actions Rapides</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {quickActions.map((action) => {
                 const IconComponent = action.icon
                 return (
